@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Cápsula Ejecutiva",
+    "slug": "capsula-ejecutiva",
+    "scheme": "capsula",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F1E9",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "co.capsula.ejecutiva",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cápsula Ejecutiva usa la cámara para fotografiar las prendas de tu clóset.",
+        "NSPhotoLibraryUsageDescription": "Cápsula Ejecutiva accede a tu fototeca para agregar prendas a tu clóset."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F1E9",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "Cápsula Ejecutiva",
+      "shortName": "Cápsula",
+      "themeColor": "#F6F1E9",
+      "backgroundColor": "#F6F1E9",
+      "display": "standalone"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cápsula Ejecutiva accede a tu fototeca para agregar prendas a tu clóset.",
+          "cameraPermission": "Cápsula Ejecutiva usa la cámara para fotografiar las prendas de tu clóset."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
