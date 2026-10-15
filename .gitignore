@@ -40,3 +40,6 @@ yarn-error.*
 /ios
 /android
 dist-standalone/
+
+# exportaciones de sesión (no son código)
+.claude/chat-exports/
