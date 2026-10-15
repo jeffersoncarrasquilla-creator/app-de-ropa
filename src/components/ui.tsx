@@ -18,10 +18,22 @@ import { colors, fonts, radius, space } from '../lib/theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
+interface DialogRequest {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  resolve: (ok: boolean) => void;
+  cancellable: boolean;
+}
+
+// En web los diálogos del navegador (alert/confirm) pueden estar bloqueados (PWA, iframes),
+// así que se muestran con un modal propio montado por <DialogHost />.
+let pushDialog: ((d: DialogRequest) => void) | null = null;
+
 /** Aviso simple compatible con iOS y web. */
 export function notify(title: string, message?: string): void {
   if (Platform.OS === 'web') {
-    window.alert(message ? `${title}\n\n${message}` : title);
+    if (pushDialog) pushDialog({ title, message, resolve: () => undefined, cancellable: false });
     return;
   }
   Alert.alert(title, message);
@@ -29,13 +41,53 @@ export function notify(title: string, message?: string): void {
 
 /** Confirmación destructiva compatible con iOS y web. */
 export function confirmAction(title: string, message: string, confirmLabel = 'Eliminar'): Promise<boolean> {
-  if (Platform.OS === 'web') return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  if (Platform.OS === 'web') {
+    return new Promise((resolve) => {
+      if (!pushDialog) return resolve(false);
+      pushDialog({ title, message, confirmLabel, resolve, cancellable: true });
+    });
+  }
   return new Promise((resolve) => {
     Alert.alert(title, message, [
       { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
       { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
     ]);
   });
+}
+
+export function DialogHost() {
+  const [queue, setQueue] = React.useState<DialogRequest[]>([]);
+  React.useEffect(() => {
+    pushDialog = (d) => setQueue((q) => [...q, d]);
+    return () => {
+      pushDialog = null;
+    };
+  }, []);
+  const current = queue[0];
+  const close = (ok: boolean) => {
+    current?.resolve(ok);
+    setQueue((q) => q.slice(1));
+  };
+  if (!current) return null;
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={() => close(false)}>
+      <View style={styles.overlay}>
+        <View style={[styles.overlayCard, { alignItems: 'stretch', maxWidth: 340, width: '86%' }]}>
+          <Text style={[styles.sheetTitle, { fontSize: 20, marginBottom: 0 }]}>{current.title}</Text>
+          {current.message ? <Text style={[styles.overlayText, { textAlign: 'left' }]}>{current.message}</Text> : null}
+          <View style={{ flexDirection: 'row', gap: space.sm, justifyContent: 'flex-end', marginTop: space.sm }}>
+            {current.cancellable ? <Button label="Cancelar" variant="ghost" compact onPress={() => close(false)} /> : null}
+            <Button
+              label={current.cancellable ? current.confirmLabel ?? 'Aceptar' : 'Entendido'}
+              variant={current.cancellable ? 'danger' : 'primary'}
+              compact
+              onPress={() => close(true)}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 /** Encabezado editorial que respeta el área segura (Dynamic Island / notch). */

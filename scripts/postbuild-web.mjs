@@ -5,7 +5,8 @@ import { join } from 'node:path';
 
 const dist = join(process.cwd(), 'dist');
 const base = (process.env.EXPO_BASE_URL ?? '').replace(/\/$/, '');
-const standalone = process.argv.includes('--standalone');
+const artifact = process.argv.includes('--artifact');
+const standalone = artifact || process.argv.includes('--standalone');
 
 const head = `
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -63,4 +64,18 @@ if (!standalone) {
   await mkdir('dist-standalone', { recursive: true });
   await writeFile('dist-standalone/index.html', html);
   console.log(`dist-standalone/index.html (${(html.length / 1048576).toFixed(1)} MB)`);
+  if (artifact) {
+    // Fragmento para hosts que ya aportan <html>/<head>/<body> (p. ej. Artifacts de claude.ai).
+    const reset = html.match(/<style id="expo-reset">[\s\S]*?<\/style>/)?.[0] ?? '';
+    const fragment = [
+      '<title>Cápsula Ejecutiva</title>',
+      '<meta name="theme-color" content="#F6F1E9">',
+      reset,
+      '<style>html,body{background:#F6F1E9;color:#2B2A28}</style>',
+      '<div id="root"></div>',
+      `${boot}<script>${js}</script>`,
+    ].join('\n');
+    await writeFile('dist-standalone/artifact.html', fragment);
+    console.log('dist-standalone/artifact.html');
+  }
 }

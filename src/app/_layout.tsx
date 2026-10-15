@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoreProvider, useStore } from '../lib/store';
 import { colors, fonts } from '../lib/theme';
+import { DialogHost } from '../components/ui';
 
 function TabsNavigator() {
   const { ready } = useStore();
@@ -53,6 +54,7 @@ function TabsNavigator() {
           tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" color={color} size={size} />,
         }}
       />
+      <Tabs.Screen name="+not-found" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -63,6 +65,7 @@ export default function RootLayout() {
       <StoreProvider>
         <StatusBar style="dark" />
         <TabsNavigator />
+        <DialogHost />
       </StoreProvider>
     </SafeAreaProvider>
   );
