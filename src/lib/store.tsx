@@ -1,14 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { DAY_NAMES, DEFAULT_SETTINGS } from './types';
-import type { DayPlan, DayWeather, Garment, HistoryEntry, Look, Settings, UserProfile, WeekPlan } from './types';
+import type { DayPlan, DayWeather, Garment, HistoryEntry, Look, OutfitStyle, Settings, UserProfile, WeekPlan } from './types';
+import { CATEGORY_LABEL, OUTFIT_STYLES } from './types';
 import { kvDelete, kvGetJson, kvSetJson } from './kv';
 import { getApiKey, setApiKey as persistApiKey } from './secrets';
 import { mondayFor, weekDates } from './dates';
 import { bogotaClimatology, fetchBogotaWeather } from './weather';
-import { lookItemIds, lookSignature, planDay, validateLook } from './planner';
+import { lookItemIds, lookSignature, parseNote, planDay, validateLook } from './planner';
 import type { PlanContext } from './planner';
-import { suggestLookWithGemini } from './gemini';
-import { deleteStoredPhoto } from './images';
+import { generateTryOn, suggestLookWithGemini } from './gemini';
+import { deleteStoredPhoto, readImageBase64, saveGeneratedImage } from './images';
 
 const K = {
   items: 'capsula.items.v1',
@@ -41,6 +42,7 @@ interface StoreValue {
   profile: UserProfile | null;
   saveProfile: (p: UserProfile) => void;
   busyDays: number[];
+  tryOnBusy: number[];
   itemById: Map<string, Garment>;
   addGarment: (g: Garment) => void;
   updateGarment: (g: Garment) => void;
@@ -49,6 +51,10 @@ interface StoreValue {
   saveApiKey: (key: string) => Promise<void>;
   setNote: (dayIndex: number, note: string) => void;
   toggleLock: (dayIndex: number) => void;
+  toggleRepeat: (dayIndex: number) => void;
+  setDayStyle: (dayIndex: number, style: OutfitStyle) => void;
+  styleFor: (day: DayPlan) => OutfitStyle;
+  generateTryOnForDay: (dayIndex: number) => Promise<string | null>;
   generateWeek: () => Promise<void>;
   regenerateDay: (dayIndex: number) => Promise<void>;
   saveWeekToHistory: () => number;
@@ -75,6 +81,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [weather, setWeather] = useState<DayWeather[]>(() => week.days.map((d) => bogotaClimatology(d.date)));
   const [busyDays, setBusyDays] = useState<number[]>([]);
+  const [tryOnBusy, setTryOnBusy] = useState<number[]>([]);
 
   // Referencias al estado más reciente para las operaciones asíncronas.
   const ref = useRef({ items, week, history, settings, apiKey, weather, profile });
@@ -185,46 +192,102 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [patchDay],
   );
 
+  /** Estilo efectivo de un día: el de la semana, o el elegido para ese día en modo "por día". */
+  const styleFor = useCallback((day: DayPlan): OutfitStyle => {
+    const st = ref.current.settings;
+    return st.styleMode === 'perDay' ? day.style ?? st.weekStyle : st.weekStyle;
+  }, []);
+
   /**
-   * Calcula el look de un día. `days` es el estado de la semana a usar como contexto:
-   * las prendas de TODOS los demás días se envían como lista de exclusión obligatoria.
+   * Calcula el look de un día. Las combinaciones de los demás días y del Historial quedan prohibidas
+   * (salvo que la usuaria permita repetir); las prendas pueden repetirse. La IA tiene prioridad.
    */
   const computeDay = useCallback(
     async (dayIndex: number, days: DayPlan[], avoidCurrent: boolean): Promise<Partial<DayPlan>> => {
       const { items: inv, history: hist, settings: st, apiKey: key, weather: wx, profile: prof } = ref.current;
       const day = days[dayIndex];
-      const exclude = new Set<string>();
-      for (const other of days) if (other.dayIndex !== dayIndex) lookItemIds(other.look).forEach((id) => exclude.add(id));
-      const avoid = new Set<string>();
-      if (avoidCurrent && day.look) avoid.add(lookSignature(day.look));
+      const repeatAllowed = !!day.allowRepeat || parseNote(day.note).wantRepeat;
+      const forbidden = new Set<string>();
+      const usedElsewhere = new Set<string>();
+      for (const other of days) {
+        if (other.dayIndex === dayIndex || !other.look) continue;
+        lookItemIds(other.look).forEach((id) => usedElsewhere.add(id));
+        if (!repeatAllowed) forbidden.add(lookSignature(other.look));
+      }
+      if (!repeatAllowed) hist.forEach((h) => forbidden.add(h.signature));
+      if (avoidCurrent && day.look) forbidden.add(lookSignature(day.look));
       const ctx: PlanContext = {
         items: inv,
         weather: wx[dayIndex] ?? bogotaClimatology(day.date),
-        exclude,
-        historySignatures: new Set(hist.map((h) => h.signature)),
-        avoidSignatures: avoid,
+        style: styleFor(day),
+        forbiddenSignatures: forbidden,
+        usedElsewhere,
         note: day.note,
       };
+      const cleared = { tryOnUri: undefined, error: undefined };
+      if (day.tryOnUri) deleteStoredPhoto(day.tryOnUri);
 
       const warnings: string[] = [];
       if (st.useGeminiPlanner && key) {
         try {
           const proposal = await suggestLookWithGemini(key, st.model, ctx, DAY_NAMES[dayIndex], prof);
           if (proposal.accessoryId && !inv.some((g) => g.id === proposal.accessoryId)) proposal.accessoryId = undefined;
-          const violations = validateLook(proposal, ctx, false);
-          if (!violations.length) {
-            return { look: proposal, source: 'gemini', error: undefined, warnings: [] };
-          }
-          warnings.push(`Gemini propuso un look que incumplía las reglas (${violations[0]}). Se recalculó con el motor local.`);
+          if (proposal.thirdId && !inv.some((g) => g.id === proposal.thirdId)) proposal.thirdId = undefined;
+          // La propuesta de la IA prevalece: solo se descarta si rompe una regla dura.
+          const violations = validateLook(proposal, ctx, 'ai');
+          if (!violations.length) return { ...cleared, look: proposal, source: 'gemini', warnings: [] };
+          warnings.push(`La IA propuso un look no válido (${violations[0]}). Se usó el motor local como respaldo.`);
         } catch (e) {
-          warnings.push(`${(e as Error).message} Se usó el motor local.`);
+          warnings.push(`${(e as Error).message} Se usó el motor local como respaldo.`);
         }
+      } else if (!key) {
+        warnings.push('Sin API Key de Gemini: look armado por el motor local. Configúrala en Ajustes para recomendaciones con IA.');
       }
       const res = planDay(ctx);
-      if (!res.ok) return { look: null, locked: false, error: res.error, warnings, source: undefined };
-      return { look: res.look, source: 'local', error: undefined, warnings: [...warnings, ...res.warnings] };
+      if (!res.ok) return { ...cleared, look: null, locked: false, error: res.error, warnings, source: undefined };
+      return { ...cleared, look: res.look, source: 'local', warnings: [...warnings, ...res.warnings] };
     },
-    [],
+    [styleFor],
+  );
+
+  const setDayStyle = useCallback((dayIndex: number, style: OutfitStyle) => patchDay(dayIndex, { style }), [patchDay]);
+
+  const toggleRepeat = useCallback(
+    (dayIndex: number) => {
+      const d = ref.current.week.days[dayIndex];
+      if (d) patchDay(dayIndex, { allowRepeat: !d.allowRepeat });
+    },
+    [patchDay],
+  );
+
+  /** Probador virtual: genera una imagen de la usuaria vistiendo el look del día. Devuelve un error legible o null. */
+  const generateTryOnForDay = useCallback(
+    async (dayIndex: number): Promise<string | null> => {
+      const { week: w, items: inv, apiKey: key, settings: st, profile: prof } = ref.current;
+      const day = w.days[dayIndex];
+      if (!day?.look) return 'Primero genera el look de este día.';
+      if (!key) return 'Configura tu API Key de Gemini en Ajustes para usar el probador virtual.';
+      setTryOnBusy((b) => [...b, dayIndex]);
+      try {
+        const map = new Map(inv.map((g) => [g.id, g]));
+        const garments = [];
+        for (const id of lookItemIds(day.look)) {
+          const g = map.get(id);
+          if (g) garments.push({ label: `${CATEGORY_LABEL[g.category]}: ${g.name} (${g.color})`, base64: await readImageBase64(g.imageUri) });
+        }
+        const body = prof?.bodyPhotoUri ? await readImageBase64(prof.bodyPhotoUri).catch(() => null) : null;
+        const img = await generateTryOn(key, st.imageModel, garments, prof, body, OUTFIT_STYLES[styleFor(day)].label);
+        if (day.tryOnUri) deleteStoredPhoto(day.tryOnUri);
+        const uri = saveGeneratedImage(img.base64, img.mimeType, `${day.date}-${Date.now()}`);
+        patchDay(dayIndex, { tryOnUri: uri });
+        return null;
+      } catch (e) {
+        return (e as Error).message;
+      } finally {
+        setTryOnBusy((b) => b.filter((x) => x !== dayIndex));
+      }
+    },
+    [patchDay, styleFor],
   );
 
   const generateWeek = useCallback(async () => {
@@ -295,6 +358,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     profile,
     saveProfile,
     busyDays,
+    tryOnBusy,
     itemById,
     addGarment,
     updateGarment,
@@ -303,6 +367,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     saveApiKey,
     setNote,
     toggleLock,
+    toggleRepeat,
+    setDayStyle,
+    styleFor,
+    generateTryOnForDay,
     generateWeek,
     regenerateDay,
     saveWeekToHistory,

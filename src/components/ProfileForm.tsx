@@ -1,9 +1,10 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fonts, radius, space } from '../lib/theme';
 import type { UserProfile } from '../lib/types';
 import { BODY_TYPES, SKIN_SEASONS, STYLE_OPTIONS, UNDERTONES } from '../lib/types';
-import { Chip, SectionLabel } from './ui';
+import { Button, Chip, SectionLabel, notify } from './ui';
+import { deleteStoredPhoto, pickPhotos, processAndStorePhoto, type PickSource } from '../lib/images';
 
 export type ProfileSection = 'basic' | 'body' | 'all';
 
@@ -131,11 +132,58 @@ export function ProfileForm({
               <Chip key={u.key} label={u.label} active={value.undertone === u.key} onPress={() => set('undertone', value.undertone === u.key ? null : u.key)} />
             ))}
           </View>
+          <BodyPhoto value={value} onChange={onChange} />
           <Text style={s.help}>
             ¿No sabes tu subtono? Mira las venas de tu muñeca con luz natural: verdosas = cálido, azuladas = frío, ambas = neutro.
           </Text>
         </>
       ) : null}
+    </View>
+  );
+}
+
+/** Foto de cuerpo entero opcional: permite que el probador virtual te muestre a ti con tus prendas. */
+function BodyPhoto({ value, onChange }: { value: UserProfile; onChange: (p: UserProfile) => void }) {
+  const [busy, setBusy] = useState(false);
+  async function pick(source: PickSource) {
+    try {
+      const [uri] = await pickPhotos(source);
+      if (!uri) return;
+      setBusy(true);
+      const photo = await processAndStorePhoto(uri, `perfil-cuerpo-${Date.now()}`);
+      if (value.bodyPhotoUri) deleteStoredPhoto(value.bodyPhotoUri);
+      onChange({ ...value, bodyPhotoUri: photo.uri });
+    } catch (e) {
+      notify('No se pudo usar la foto', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <View style={{ marginTop: space.md }}>
+      <SectionLabel>Probador virtual (opcional)</SectionLabel>
+      <Text style={s.help}>
+        Agrega una foto tuya de cuerpo entero, de frente y con buena luz, para que la IA te muestre vestida con tus prendas. Se guarda
+        solo en tu teléfono y se envía a Gemini únicamente cuando pides ver un look.
+      </Text>
+      <View style={[s.row, { alignItems: 'center', marginTop: space.sm }]}>
+        {value.bodyPhotoUri ? <Image source={{ uri: value.bodyPhotoUri }} style={s.bodyThumb} /> : null}
+        <View style={{ flex: 1, gap: space.sm }}>
+          <Button label="Tomar foto" icon="camera-outline" variant="secondary" compact loading={busy} onPress={() => void pick('camera')} />
+          <Button label="Elegir de la galería" icon="image-outline" variant="secondary" compact disabled={busy} onPress={() => void pick('library')} />
+          {value.bodyPhotoUri ? (
+            <Button
+              label="Quitar foto"
+              variant="ghost"
+              compact
+              onPress={() => {
+                if (value.bodyPhotoUri) deleteStoredPhoto(value.bodyPhotoUri);
+                onChange({ ...value, bodyPhotoUri: undefined });
+              }}
+            />
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
@@ -186,5 +234,6 @@ const s = StyleSheet.create({
   optionActive: { backgroundColor: colors.charcoal, borderColor: colors.charcoal },
   optionLabel: { fontFamily: fonts.serif, fontSize: 16, color: colors.charcoal },
   optionHint: { fontFamily: fonts.sans, fontSize: 12, color: colors.muted, marginTop: 2 },
+  bodyThumb: { width: 84, height: 112, borderRadius: radius.sm, backgroundColor: colors.ivory },
   help: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: space.sm },
 });

@@ -1,15 +1,16 @@
 import React from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts, radius, space } from '../lib/theme';
-import type { DayPlan, DayWeather, Garment } from '../lib/types';
-import { DAY_NAMES } from '../lib/types';
+import type { DayPlan, DayWeather, Garment, OutfitStyle } from '../lib/types';
+import { DAY_NAMES, OUTFIT_STYLE_ORDER, OUTFIT_STYLES } from '../lib/types';
 import { shortDate } from '../lib/dates';
-import { Button, IconButton } from './ui';
+import { Button, Chip, IconButton } from './ui';
 import { GarmentImage } from './GarmentImage';
 
-const SLOTS: { key: 'thirdId' | 'topId' | 'bottomId' | 'shoesId' | 'accessoryId'; label: string }[] = [
+const SLOTS: { key: 'thirdId' | 'dressId' | 'topId' | 'bottomId' | 'shoesId' | 'accessoryId'; label: string }[] = [
   { key: 'thirdId', label: 'Tercera pieza' },
+  { key: 'dressId', label: 'Vestido' },
   { key: 'topId', label: 'Blusa/Top' },
   { key: 'bottomId', label: 'Inferior' },
   { key: 'shoesId', label: 'Calzado' },
@@ -21,19 +22,33 @@ export function DayCard({
   weather,
   itemById,
   busy,
+  style,
+  perDayStyle,
+  tryOnBusy,
   onToggleLock,
   onRegenerate,
   onNote,
+  onStyle,
+  onToggleRepeat,
+  onTryOn,
 }: {
   day: DayPlan;
   weather?: DayWeather;
   itemById: Map<string, Garment>;
   busy: boolean;
+  style: OutfitStyle;
+  /** Modo "estilo por día": muestra el selector de estilo en la tarjeta. */
+  perDayStyle: boolean;
+  tryOnBusy: boolean;
   onToggleLock: () => void;
   onRegenerate: () => void;
   onNote: (note: string) => void;
+  onStyle: (s: OutfitStyle) => void;
+  onToggleRepeat: () => void;
+  onTryOn: () => void;
 }) {
   const look = day.look;
+  const meta = OUTFIT_STYLES[style];
   return (
     <View style={[styles.card, day.locked && styles.cardLocked]}>
       <View style={styles.head}>
@@ -57,6 +72,16 @@ export function DayCard({
           onPress={onToggleLock}
         />
       </View>
+
+      {perDayStyle ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {OUTFIT_STYLE_ORDER.map((k) => (
+            <Chip key={k} label={OUTFIT_STYLES[k].label} active={style === k} onPress={() => !day.locked && onStyle(k)} />
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={styles.styleTag}>Estilo {meta.label}</Text>
+      )}
 
       {busy ? (
         <View style={styles.placeholder}>
@@ -82,7 +107,18 @@ export function DayCard({
             })}
           </ScrollView>
           {look.rationale ? <Text style={styles.rationale}>{look.rationale}</Text> : null}
-          {day.source ? <Text style={styles.source}>{day.source === 'gemini' ? 'Propuesto por Gemini · validado' : 'Motor de reglas local'}</Text> : null}
+          {day.source ? <Text style={styles.source}>{day.source === 'gemini' ? 'Sugerido por la IA' : 'Motor de reglas local (respaldo)'}</Text> : null}
+
+          {day.tryOnUri ? <Image source={{ uri: day.tryOnUri }} style={styles.tryOn} resizeMode="cover" accessibilityLabel="Así te verías con este look" /> : null}
+          <Button
+            label={tryOnBusy ? 'Creando tu imagen…' : day.tryOnUri ? 'Volver a generar la imagen' : 'Ver cómo me queda'}
+            icon="person-outline"
+            variant={day.tryOnUri ? 'ghost' : 'secondary'}
+            compact
+            loading={tryOnBusy}
+            disabled={tryOnBusy}
+            onPress={onTryOn}
+          />
         </>
       ) : (
         <View style={styles.placeholder}>
@@ -107,6 +143,9 @@ export function DayCard({
         style={[styles.note, day.locked && { opacity: 0.5 }]}
         multiline
       />
+      <View style={styles.repeatRow}>
+        <Chip label={day.allowRepeat ? '✓ Permitir repetir un look' : 'Permitir repetir un look'} active={!!day.allowRepeat} onPress={() => !day.locked && onToggleRepeat()} />
+      </View>
       <Button
         label={day.locked ? 'Bloqueado con candado' : 'Regenerar solo este día'}
         icon={day.locked ? 'lock-closed' : 'refresh'}
@@ -143,6 +182,9 @@ const styles = StyleSheet.create({
   },
   weatherText: { fontFamily: fonts.sans, fontSize: 11, color: colors.taupeDark },
   piece: { width: 92 },
+  styleTag: { fontFamily: fonts.sans, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: colors.taupeDark },
+  tryOn: { width: '100%', aspectRatio: 3 / 4, borderRadius: radius.md, backgroundColor: colors.ivory, maxWidth: 420, alignSelf: 'center' },
+  repeatRow: { flexDirection: 'row' },
   pieceImg: { width: 92, height: 122, borderRadius: radius.sm },
   pieceLabel: {
     fontFamily: fonts.sans,

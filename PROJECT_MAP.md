@@ -13,7 +13,7 @@ PROJECT_MAP.md               Este mapa
 src/app/                     RUTAS (Expo Router)
   _layout.tsx                Raíz: SafeArea + StoreProvider + puerta de onboarding + Tabs (3 pestañas) + DialogHost
   index.tsx                  Pestaña "Mi Clóset": grilla, filtros, botón +, ingestOne (editor) / ingestBatch (cola)
-  semana.tsx                 Pestaña "Semana": generar semana, guardar en Historial, lista de DayCard
+  semana.tsx                 Pestaña "Semana": hoja "¿mismo estilo todos los días?" (mismo / por día), generar, guardar, DayCard
   ajustes.tsx                Pestaña "Historial/Ajustes": historial; Mi perfil (resumen + Sheet con ProfileForm),
                              API Key/modelo, planificador, borrar datos (conserva perfil y API Key)
   +not-found.tsx             Redirige rutas desconocidas a "/" (oculta en tabs)
@@ -22,19 +22,21 @@ src/components/
                              LoadingOverlay, DialogHost + notify()/confirmAction() (modal propio en web)
   GarmentImage.tsx           Miniatura de prenda con fallback
   GarmentEditor.tsx          Hoja para revisar/editar etiquetas de una prenda
-  DayCard.tsx                Tarjeta diaria: piezas, clima, candado, nota rápida, "Regenerar solo este día"
+  DayCard.tsx                Tarjeta diaria: estilo (chips si es por día), piezas, clima, candado, nota, "Permitir repetir",
+                             probador virtual ("Ver cómo me queda"), "Regenerar solo este día"
   Welcome.tsx                Bienvenida (eslogan) + flujo de onboarding por pasos
-  ProfileForm.tsx            Formulario de perfil (datos básicos + biométricos), reutilizado en onboarding y Ajustes
+  ProfileForm.tsx            Formulario de perfil (datos básicos + biométricos + foto de cuerpo entero opcional), onboarding y Ajustes
 src/lib/
   theme.ts                   Tokens de color, tipografía y espaciado (NO cambiar valores validados)
   types.ts                   Modelos de dominio (ver abajo) y constantes (categorías, días, defaults)
   kv.ts                      Persistencia clave-valor: AsyncStorage (iOS) / IndexedDB (web)
   secrets.ts                 API Key de Gemini en SecureStore (iOS) / IndexedDB (web)
-  images.ts                  Selector (cámara / fototeca, selección múltiple), HEIC→JPEG, compresión, archivo local
+  images.ts                  Selector (cámara / fototeca, selección múltiple), HEIC→JPEG, compresión, archivo local;
+                             readImageBase64, saveGeneratedImage (probador)
   gemini.ts                  Cliente Gemini: tagGarment (visión→JSON), suggestLookWithGemini, pingGemini;
-                             callGemini reintenta 429/500/503 (2s, 5s, 10s) y explica cuota agotada
+                             requestGemini reintenta 429/500/503 y explica cuota agotada; generateTryOn (imagen del look puesto)
   prompts.ts                 Prompts de IA y bloque de contexto del perfil (profileContext)
-  planner.ts                 Motor de reglas: planDay, validateLook, lookSignature, parseNote, warmthNeed
+  planner.ts                 Motor de reglas: planDay, validateLook('ai'|'strict'), lookSignature, parseNote, warmthNeed
   weather.ts                 Pronóstico Open-Meteo Bogotá + climatología de respaldo (9–19 °C)
   dates.ts                   Lunes de la semana, fechas cortas/largas
   store.tsx                  StoreProvider/useStore: prendas, semana, historial, ajustes, perfil, API Key; acciones
@@ -47,12 +49,13 @@ scripts/
 ```
 
 ## Modelos (`src/lib/types.ts`)
-- `Garment` { id, imageUri, category: top|tercera|inferior|calzado|accesorio, subtype, name, color, colorHex, texture, warmth 1-5, formality 1-5, rainSafe, aiTagged, needsReview? }
-- `Look` { topId, thirdId, bottomId, shoesId, accessoryId?, rationale }
-- `DayPlan` { dayIndex 0-4, date, look|null, locked, note, source?, error?, warnings? } · `WeekPlan` { weekStart, days[5] }
+- `Garment` { id, imageUri, category: top|tercera|inferior|vestido|calzado|accesorio, subtype, name, color, colorHex, texture, warmth 1-5, formality 1-5, rainSafe, aiTagged, styles?: OutfitStyle[], multipleInPhoto?, needsReview? }
+- `Look` { topId?, bottomId?, dressId?, thirdId?, shoesId, accessoryId?, rationale }
+- `OutfitStyle` ejecutivo|casual|elegante|deportivo|playa|fiesta (meta en `OUTFIT_STYLES`)
+- `DayPlan` { dayIndex 0-4, date, look|null, locked, note, style?, allowRepeat?, tryOnUri?, source?, error?, warnings? } · `WeekPlan` { weekStart, days[5] }
 - `HistoryEntry` { id, date, look, signature, savedAt }
-- `Settings` { model (def. gemini-3.5-flash; ajustes viejos con gemini-4-argon se migran al cargar), useGeminiPlanner, weekOffset 0|1 }
-- `UserProfile` { name, age, profession, style, heightCm, weightKg, bodyType, bust/waist/hipCm?, skinTone, undertone, completedAt }
+- `Settings` { model (def. gemini-3.5-flash; gemini-4-argon migra), imageModel (def. gemini-3.1-flash-image), useGeminiPlanner, weekOffset 0|1, styleMode same|perDay|null (null = preguntar), weekStyle }
+- `UserProfile` { name, age, profession, style, heightCm, weightKg, bodyType, bust/waist/hipCm?, skinSeason, undertone, bodyPhotoUri?, completedAt }
 - Perfil: opciones en `STYLE_OPTIONS`, `BODY_TYPES`, `SKIN_SEASONS`, `UNDERTONES`; `EMPTY_PROFILE` como valor inicial.
 - Claves kv: `capsula.items.v1`, `capsula.week.v1`, `capsula.history.v1`, `capsula.settings.v1`, `capsula.profile.v1`
 
@@ -60,7 +63,10 @@ scripts/
 - Arranque: `_layout` carga store → si no hay `profile` → `Welcome` (bienvenida → pasos de perfil) → Tabs.
 - Carga simple: + → cámara/fototeca → `processAndStorePhoto` → `tagGarment(profile)` → `GarmentEditor` → guardar.
 - Carga masiva: + → "Varias fotos" → cola secuencial (comprimir → etiquetar) → se agregan directo; las que fallan quedan `needsReview`.
-- Semana: `generateWeek` (días sin candado, en orden, exclusión acumulada) · `regenerateDay(i)` (exclusión = otros 4 días).
+- Semana: primera vez pregunta estilo (mismo / por día) · `generateWeek` (días sin candado) · `regenerateDay(i)`: prohíbe las combinaciones de los otros días, del Historial y la actual; las prendas pueden repetirse.
+- IA primero: `computeDay` pide a Gemini; valida en modo 'ai'; si falla o no hay clave, `planDay` local.
+- Probador: `generateTryOnForDay(i)` envía fotos de las prendas (+ foto de cuerpo entero si existe) a `generateTryOn`; requiere modelo de imagen con cuota.
+- Carga: la hoja de + advierte "una sola prenda por foto"; Gemini marca `multipleInPhoto` y la prenda queda por revisar.
 - Gemini recibe `profileContext(profile)` en etiquetado y en armado de looks.
 
 ## Estado por fases
@@ -70,4 +76,6 @@ scripts/
 - [x] Módulo 2 (parcial): carga masiva (hasta 20 fotos, cola secuencial, badge "Por revisar")
 - [ ] Módulo 2 (resto) y módulos siguientes: pendientes de especificación (el mensaje del dueño llegó truncado)
 - [x] Prueba real con API Key (16-oct-2026): gemini-3.5-flash etiqueta y arma looks válidos; gemini-4-argon sin cuota en plan gratuito
+- [x] Correcciones de pruebas (16-oct): prendas repetibles/combinaciones únicas, vestidos, estilo por semana o por día, aviso una prenda por foto, IA con prioridad, probador virtual
+- [ ] Probador virtual sin probar con imagen real: la clave gratuita no tiene cuota en modelos de imagen (429)
 - [ ] Pendiente técnico: el motor local aún no usa el perfil (solo Gemini lo recibe)

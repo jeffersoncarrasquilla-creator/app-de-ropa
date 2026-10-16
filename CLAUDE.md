@@ -20,5 +20,8 @@ EXPO_OFFLINE=1 CI=1 npm run build:artifact   # build web; sirve para probar con 
 - Chromium para pruebas E2E: `executablePath: '/opt/pw-browsers/chromium'` con `playwright-core`.
 
 ## Reglas de negocio que no se deben romper
-- `src/lib/planner.ts` es la fuente de verdad: no repetir looks completos del Historial ni prendas principales en la semana; al regenerar un día, las prendas de los otros 4 días son exclusión obligatoria. Toda propuesta de Gemini se valida con `validateLook`.
+- `src/lib/planner.ts`: las prendas SÍ pueden repetirse; las COMBINACIONES (vestido o blusa+inferior, tercera pieza, calzado) no se repiten en la semana ni frente al Historial, salvo que la usuaria lo pida (`allowRepeat` o nota "repetir").
+- Look = vestido, o blusa + inferior; calzado obligatorio; tercera pieza obligatoria solo en estilo Ejecutivo.
+- Estilos de outfit (`OUTFIT_STYLES` en `types.ts`): Ejecutivo, Casual, Elegante, Deportivo, Playa, Fiesta; el mismo para la semana o uno por día.
+- **La IA prevalece**: la propuesta de Gemini solo se descarta si rompe una regla dura (`validateLook(..., 'ai')`); el motor local es respaldo.
 - La API Key de Gemini solo vive en SecureStore (`src/lib/secrets.ts`).
