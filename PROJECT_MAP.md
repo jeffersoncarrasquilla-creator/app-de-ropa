@@ -50,7 +50,7 @@ scripts/
 - `Look` { topId, thirdId, bottomId, shoesId, accessoryId?, rationale }
 - `DayPlan` { dayIndex 0-4, date, look|null, locked, note, source?, error?, warnings? } · `WeekPlan` { weekStart, days[5] }
 - `HistoryEntry` { id, date, look, signature, savedAt }
-- `Settings` { model (def. gemini-4-argon), useGeminiPlanner, weekOffset 0|1 }
+- `Settings` { model (def. gemini-3.5-flash; ajustes viejos con gemini-4-argon se migran al cargar), useGeminiPlanner, weekOffset 0|1 }
 - `UserProfile` { name, age, profession, style, heightCm, weightKg, bodyType, bust/waist/hipCm?, skinTone, undertone, completedAt }
 - Perfil: opciones en `STYLE_OPTIONS`, `BODY_TYPES`, `SKIN_SEASONS`, `UNDERTONES`; `EMPTY_PROFILE` como valor inicial.
 - Claves kv: `capsula.items.v1`, `capsula.week.v1`, `capsula.history.v1`, `capsula.settings.v1`, `capsula.profile.v1`

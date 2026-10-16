@@ -92,6 +92,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         kvGetJson<UserProfile | null>(K.profile, null),
       ]);
       const merged = { ...DEFAULT_SETTINGS, ...s };
+      // Migración: el predeterminado anterior (gemini-4-argon) no tiene cuota en el plan gratuito.
+      if (merged.model === 'gemini-4-argon') merged.model = DEFAULT_SETTINGS.model;
       const monday = mondayFor(new Date(), merged.weekOffset);
       setItems(i);
       setHistory(h);

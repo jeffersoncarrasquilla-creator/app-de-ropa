@@ -82,7 +82,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  model: 'gemini-4-argon',
+  model: 'gemini-3.5-flash',
   useGeminiPlanner: true,
   weekOffset: 0,
 };
