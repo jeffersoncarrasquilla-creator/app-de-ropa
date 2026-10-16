@@ -26,9 +26,14 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run test:planner
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - run: npm run build:web
         env:
           EXPO_BASE_URL: /${{ github.event.repository.name }}
+          EXPO_OFFLINE: '1'
+          CI: '1'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

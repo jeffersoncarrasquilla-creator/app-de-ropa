@@ -26,6 +26,7 @@ html = html
 if (!standalone) {
   await writeFile(join(dist, 'index.html'), html);
   await writeFile(join(dist, '404.html'), html); // GitHub Pages: rutas profundas sirven la app
+  await writeFile(join(dist, '.nojekyll'), ''); // Pages no debe ignorar la carpeta _expo
   await copyFile('assets/icon.png', join(dist, 'apple-touch-icon.png'));
   await writeFile(
     join(dist, 'manifest.json'),

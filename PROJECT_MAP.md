@@ -42,7 +42,8 @@ scripts/
   planner-check.ts           Prueba de reglas (npm run test:planner)
   postbuild-web.mjs          PWA (manifest, 404) / --standalone / --artifact (archivo único)
   serve-web.mjs              Servidor estático de dist/ en 0.0.0.0:8080
-.github/workflows/pages.yml  Typecheck + test + build + deploy a GitHub Pages (push a main)
+.github/workflows/pages.yml  Typecheck + test + configure-pages (enablement) + build con EXPO_BASE_URL=/app-de-ropa + deploy
+                             URL pública: https://jeffersoncarrasquilla-creator.github.io/app-de-ropa/
 ```
 
 ## Modelos (`src/lib/types.ts`)
