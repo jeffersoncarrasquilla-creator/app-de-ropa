@@ -31,7 +31,8 @@ src/lib/
   kv.ts                      Persistencia clave-valor: AsyncStorage (iOS) / IndexedDB (web)
   secrets.ts                 API Key de Gemini en SecureStore (iOS) / IndexedDB (web)
   images.ts                  Selector (cámara / fototeca, selección múltiple), HEIC→JPEG, compresión, archivo local
-  gemini.ts                  Cliente Gemini: tagGarment (visión→JSON), suggestLookWithGemini, pingGemini
+  gemini.ts                  Cliente Gemini: tagGarment (visión→JSON), suggestLookWithGemini, pingGemini;
+                             callGemini reintenta 429/500/503 (2s, 5s, 10s) y explica cuota agotada
   prompts.ts                 Prompts de IA y bloque de contexto del perfil (profileContext)
   planner.ts                 Motor de reglas: planDay, validateLook, lookSignature, parseNote, warmthNeed
   weather.ts                 Pronóstico Open-Meteo Bogotá + climatología de respaldo (9–19 °C)
@@ -67,4 +68,5 @@ scripts/
 - [x] Módulo 1: bienvenida (eslogan) + onboarding en 2 pasos + perfil biométrico editable en Ajustes + contexto en Gemini
 - [x] Módulo 2 (parcial): carga masiva (hasta 20 fotos, cola secuencial, badge "Por revisar")
 - [ ] Módulo 2 (resto) y módulos siguientes: pendientes de especificación (el mensaje del dueño llegó truncado)
+- [x] Prueba real con API Key (16-oct-2026): gemini-3.5-flash etiqueta y arma looks válidos; gemini-4-argon sin cuota en plan gratuito
 - [ ] Pendiente técnico: el motor local aún no usa el perfil (solo Gemini lo recibe)

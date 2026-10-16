@@ -32,28 +32,52 @@ function clampLevel(n: unknown): Level {
   return Math.min(5, Math.max(1, v)) as Level;
 }
 
+const RETRY_DELAYS_MS = [2000, 5000, 10000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type GeminiBody = {
+  error?: { message?: string };
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
+} | null;
+
 async function callGemini(apiKey: string, model: string, parts: unknown[], schema: object, temperature: number): Promise<unknown> {
   if (!apiKey) throw new Error('Configura tu API Key de Gemini en Historial/Ajustes.');
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(model.trim())}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        temperature,
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-      },
-    }),
-  });
-  const body = (await res.json().catch(() => null)) as {
-    error?: { message?: string };
-    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-    promptFeedback?: { blockReason?: string };
-  } | null;
+  const request = () =>
+    fetch(`${ENDPOINT}/${encodeURIComponent(model.trim())}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        generationConfig: {
+          temperature,
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+        },
+      }),
+    });
+
+  // Reintenta los fallos transitorios (alta demanda, límite por minuto, errores del servidor).
+  // Una cuota agotada ("limit: 0" o cuota diaria) no se reintenta: no se resolverá en segundos.
+  let res: Response;
+  let body: GeminiBody;
+  for (let attempt = 0; ; attempt++) {
+    res = await request();
+    body = (await res.json().catch(() => null)) as GeminiBody;
+    const msg = body?.error?.message ?? '';
+    const quotaExhausted = /limit: 0|per day|PerDay/i.test(msg);
+    const transient = res.status === 429 || res.status === 500 || res.status === 503 || (res.status === 403 && /caller does not have permission/i.test(msg));
+    if (res.ok || !transient || quotaExhausted || attempt >= RETRY_DELAYS_MS.length) break;
+    await sleep(RETRY_DELAYS_MS[attempt]);
+  }
   if (!res.ok) {
     const msg = body?.error?.message ?? `HTTP ${res.status}`;
     if (res.status === 404) throw new Error(`Modelo "${model}" no disponible: ${msg}. Cámbialo en Ajustes.`);
+    if (res.status === 429 && /limit: 0/i.test(msg)) {
+      throw new Error(`Tu plan de Gemini no tiene cuota para "${model}". Activa la facturación en Google AI Studio o cambia el modelo en Ajustes (p. ej. gemini-3.5-flash).`);
+    }
+    if (res.status === 429) throw new Error(`Se alcanzó el límite de uso de Gemini para "${model}". Intenta más tarde o cambia el modelo en Ajustes.`);
+    if (res.status === 503) throw new Error(`El modelo "${model}" está saturado en este momento. Intenta de nuevo en unos minutos.`);
     if (res.status === 400 || res.status === 403) throw new Error(`Gemini rechazó la solicitud (API Key o modelo): ${msg}`);
     throw new Error(`Error de Gemini: ${msg}`);
   }
