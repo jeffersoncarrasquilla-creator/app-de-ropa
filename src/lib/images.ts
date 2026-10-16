@@ -90,3 +90,32 @@ export function deleteStoredPhoto(uri: string): void {
     // El archivo ya no existe: nada que limpiar.
   }
 }
+
+/** Lee una foto guardada como JPEG base64 (sin prefijo) para enviarla a Gemini. */
+export async function readImageBase64(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) return uri.slice(uri.indexOf(',') + 1);
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(uri)).blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+    return dataUrl.slice(dataUrl.indexOf(',') + 1);
+  }
+  return new File(uri).base64();
+}
+
+/** Guarda una imagen generada por la IA (probador virtual) de forma persistente. */
+export function saveGeneratedImage(base64: string, mimeType: string, id: string): string {
+  if (Platform.OS === 'web') return `data:${mimeType};base64,${base64}`;
+  const dir = new Directory(Paths.document, 'probador');
+  if (!dir.exists) dir.create({ intermediates: true });
+  const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
+  const f = new File(dir, `${id}.${ext}`);
+  if (f.exists) f.delete();
+  f.create();
+  f.write(base64, { encoding: 'base64' });
+  return f.uri;
+}

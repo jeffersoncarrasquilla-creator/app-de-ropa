@@ -83,13 +83,14 @@ function SettingsPanel() {
   const [profileDraft, setProfileDraft] = useState<UserProfile | null>(null);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [modelDraft, setModelDraft] = useState(settings.model);
+  const [imageModelDraft, setImageModelDraft] = useState(settings.imageModel);
   const [testing, setTesting] = useState(false);
   useEffect(() => setKeyDraft(apiKey), [apiKey]);
   useEffect(() => setModelDraft(settings.model), [settings.model]);
 
   async function save() {
     await saveApiKey(keyDraft);
-    updateSettings({ model: modelDraft.trim() || DEFAULT_SETTINGS.model });
+    updateSettings({ model: modelDraft.trim() || DEFAULT_SETTINGS.model, imageModel: imageModelDraft.trim() || DEFAULT_SETTINGS.imageModel });
     notify('Ajustes guardados', secureStorageAvailable ? 'La API Key quedó en el llavero seguro del iPhone (SecureStore).' : 'La API Key quedó guardada localmente en este navegador.');
   }
 
@@ -169,6 +170,20 @@ function SettingsPanel() {
           style={styles.input}
         />
         <Text style={styles.help}>Predeterminado: {DEFAULT_SETTINGS.model}. Puedes escribir cualquier modelo multimodal de Gemini disponible para tu clave.</Text>
+        <Text style={[styles.label, { marginTop: space.md }]}>Modelo de imagen (probador virtual)</Text>
+        <TextInput
+          value={imageModelDraft}
+          onChangeText={setImageModelDraft}
+          placeholder={DEFAULT_SETTINGS.imageModel}
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.input}
+        />
+        <Text style={styles.help}>
+          Genera la imagen de ti vestida con el look. Los modelos de imagen de Gemini suelen requerir facturación activa en Google AI
+          Studio (cobro por imagen).
+        </Text>
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
           <Button label="Guardar" icon="checkmark" onPress={() => void save()} style={{ flex: 1 }} />
           <Button label="Probar" icon="pulse-outline" variant="secondary" onPress={() => void test()} loading={testing} disabled={!keyDraft.trim()} />
@@ -179,8 +194,8 @@ function SettingsPanel() {
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.rowTitle}>Armar looks con Gemini</Text>
-            <Text style={styles.help}>Cada propuesta se valida con las reglas estrictas; si falla, se usa el motor local.</Text>
+            <Text style={styles.rowTitle}>La IA arma los looks (recomendado)</Text>
+            <Text style={styles.help}>La sugerencia de la IA tiene prioridad. El motor local solo actúa si no hay API Key o la IA falla.</Text>
           </View>
           <Toggle value={settings.useGeminiPlanner} onValueChange={(v) => updateSettings({ useGeminiPlanner: v })} />
         </View>

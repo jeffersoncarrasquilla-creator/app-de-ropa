@@ -7,18 +7,20 @@ App para iPhone (React Native + Expo SDK 57 + TypeScript + Expo Router, con vers
 | Pestaña | Qué hace |
 | --- | --- |
 | **Bienvenida y perfil** | Primera apertura: pantalla con el eslogan *"My Closet, tu asesor de moda, siempre"* y onboarding en 2 pasos (nombre, edad, profesión, estilo; altura, peso, tipo de cuerpo, medidas, colorimetría y subtono). Editable en Ajustes. Estos datos se inyectan en los prompts de Gemini. |
-| **Mi Clóset** | Botón **+** → cámara o fototeca (`expo-image-picker`). La foto se convierte de HEIC a JPEG, se redimensiona y comprime (`expo-image-manipulator`) y se guarda en el teléfono (`expo-file-system`; IndexedDB en web). Gemini la etiqueta en JSON: categoría, color, textura, abrigo térmico 1‑5, formalidad ejecutiva 1‑5 y apto para lluvia. Las etiquetas se pueden corregir a mano. **Carga masiva**: hasta 20 fotos de la fototeca a la vez; cada una se comprime y etiqueta en cola y las que fallan quedan *Por revisar*. |
+| **Mi Clóset** | Botón **+** → cámara o fototeca (`expo-image-picker`). La foto se convierte de HEIC a JPEG, se redimensiona y comprime (`expo-image-manipulator`) y se guarda en el teléfono (`expo-file-system`; IndexedDB en web). Antes de cargar se advierte: una sola prenda por foto. Gemini la etiqueta en JSON: categoría (incluye vestidos), estilos, color, textura, abrigo térmico 1‑5, formalidad ejecutiva 1‑5 y apto para lluvia. Las etiquetas se pueden corregir a mano. **Carga masiva**: hasta 20 fotos de la fototeca a la vez; cada una se comprime y etiqueta en cola y las que fallan quedan *Por revisar*. |
 | **Semana** | Genera 5 looks por capas (blusa + tercera pieza + pantalón/falda + calzado + bolso opcional) con el pronóstico de Open‑Meteo para Bogotá (o climatología 9–19 °C si no hay red). Cada tarjeta tiene **candado** y **Regenerar solo este día** con nota rápida. |
 | **Historial/Ajustes** | Looks confirmados (no se vuelven a proponer). API Key de Gemini en `expo-secure-store` (llavero iOS) y modelo configurable (por defecto `gemini-3.5-flash`; `gemini-4-argon` requiere facturación activa). |
 
-### Reglas estrictas del planificador (`src/lib/planner.ts`)
+### Reglas del planificador (`src/lib/planner.ts`)
 
-1. Prohibido repetir looks completos del Historial (firma = blusa + tercera pieza + inferior + calzado).
-2. Prohibido repetir prendas principales (blusa, tercera pieza, pantalón/falda) en la misma semana.
-3. Al regenerar un día, las prendas de los otros 4 días se envían como **lista de exclusión obligatoria** y solo se recalcula ese día. El calzado solo se repite si no queda ninguna alternativa (se advierte); el bolso nunca se repite (se omite).
-4. Formalidad ejecutiva promedio ≥ 3, abrigo suficiente según la mínima del día, prioridad a calzado impermeable si llueve, y blusa presentable sola para la oficina cerrada.
+1. Las prendas pueden repetirse durante la semana (se favorece la variedad).
+2. Las **combinaciones** no se repiten, ni en la semana ni frente al Historial, salvo que la usuaria active *Permitir repetir un look* o lo pida en la nota.
+3. Un look es un vestido, o blusa + pantalón/falda; calzado obligatorio; tercera pieza obligatoria en estilo Ejecutivo y sugerida según el clima.
+4. Estilo del día: Ejecutivo, Casual, Elegante, Deportivo, Playa o Fiesta; el mismo toda la semana o uno distinto por día.
+5. **La IA prevalece**: si hay API Key, Gemini arma el look y solo se descarta si rompe una regla dura; el motor local es el respaldo.
 
-Si Gemini está activo, su propuesta se valida con estas mismas reglas; si las incumple o falla, se usa el motor local.
+### Probador virtual
+"Ver cómo me queda" genera con Gemini una foto realista de la usuaria (con su foto de cuerpo entero, si la agregó en el perfil) o de una modelo con su fisonomía, vistiendo las prendas del look. Requiere un modelo de imagen con cuota (`gemini-3.1-flash-image` por defecto): en el plan gratuito suele no haber cuota y hay que activar la facturación en Google AI Studio.
 
 ## Ejecutar
 

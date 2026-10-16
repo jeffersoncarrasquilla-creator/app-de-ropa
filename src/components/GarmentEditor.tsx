@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, fonts, radius, space } from '../lib/theme';
 import type { Category, Garment, Level } from '../lib/types';
-import { CATEGORY_LABEL, CATEGORY_ORDER } from '../lib/types';
+import { CATEGORY_LABEL, CATEGORY_ORDER, OUTFIT_STYLE_ORDER, OUTFIT_STYLES } from '../lib/types';
 import { Button, Chip, SectionLabel, Sheet, Toggle } from './ui';
 
 function LevelPicker({ value, onChange, label }: { value: Level; onChange: (v: Level) => void; label: string }) {
@@ -79,7 +79,7 @@ export function GarmentEditor({
         <View style={s.top}>
           <Image source={{ uri: draft.imageUri }} style={s.photo} />
           <View style={{ flex: 1, gap: 6 }}>
-            <Text style={s.badge}>{draft.aiTagged ? 'Etiquetado por Gemini' : 'Etiquetado manual'}</Text>
+            <Text style={s.badge}>{draft.aiTagged ? 'Etiquetado por la IA' : 'Etiquetado manual'}</Text>
             {aiMessage ? <Text style={s.aiMsg}>{aiMessage}</Text> : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={[s.swatch, { backgroundColor: draft.colorHex }]} />
@@ -101,9 +101,24 @@ export function GarmentEditor({
         <Field label="Color" value={draft.color} onChangeText={(v) => set('color', v)} placeholder="azul marino" />
         <Field label="Textura" value={draft.texture} onChangeText={(v) => set('texture', v)} placeholder="lana, crepé, seda…" />
 
-        <SectionLabel>Clima y oficina</SectionLabel>
+        <SectionLabel>Estilos en los que la usas</SectionLabel>
+        <View style={s.wrap}>
+          {OUTFIT_STYLE_ORDER.map((k) => {
+            const on = !!draft.styles?.includes(k);
+            return (
+              <Chip
+                key={k}
+                label={OUTFIT_STYLES[k].label}
+                active={on}
+                onPress={() => set('styles', on ? (draft.styles ?? []).filter((x) => x !== k) : [...(draft.styles ?? []), k])}
+              />
+            );
+          })}
+        </View>
+
+        <SectionLabel>Clima y formalidad</SectionLabel>
         <LevelPicker label="Abrigo térmico" value={draft.warmth} onChange={(v) => set('warmth', v)} />
-        <LevelPicker label="Formalidad ejecutiva" value={draft.formality} onChange={(v) => set('formality', v)} />
+        <LevelPicker label="Formalidad" value={draft.formality} onChange={(v) => set('formality', v)} />
         <View style={s.switchRow}>
           <Text style={s.switchLabel}>Apto para lluvia</Text>
           <Toggle value={draft.rainSafe} onValueChange={(v) => set('rainSafe', v)} />
@@ -113,7 +128,7 @@ export function GarmentEditor({
           <Button
             label={isNew ? 'Guardar en mi clóset' : 'Guardar cambios'}
             icon="checkmark"
-            onPress={() => onSave({ ...draft, name: draft.name.trim() || draft.subtype || 'Prenda' })}
+            onPress={() => onSave({ ...draft, multipleInPhoto: false, name: draft.name.trim() || draft.subtype || 'Prenda' })}
           />
           {!isNew && onDelete ? (
             <Button label="Eliminar prenda" icon="trash-outline" variant="danger" onPress={() => onDelete(draft)} />

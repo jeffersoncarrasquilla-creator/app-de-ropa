@@ -76,6 +76,7 @@ export default function ClosetScreen() {
       setBusy(`Analizando la prenda con ${settings.model}…`);
       try {
         Object.assign(base, await tagGarment(apiKey, settings.model, photo.base64, profile), { aiTagged: true });
+        if (base.multipleInPhoto) aiMessage = 'La IA detectó varias prendas en la foto: etiquetó la más visible. Para mayor precisión, usa una foto con una sola prenda.';
       } catch (e) {
         aiMessage = `${(e as Error).message} Completa las etiquetas manualmente.`;
       }
@@ -94,6 +95,7 @@ export default function ClosetScreen() {
     let tagged = 0;
     let review = 0;
     let failed = 0;
+    let multiple = 0;
     let lastError = '';
     for (let i = 0; i < uris.length; i++) {
       const n = `${i + 1} de ${uris.length}`;
@@ -107,6 +109,10 @@ export default function ClosetScreen() {
           try {
             Object.assign(g, await tagGarment(apiKey, settings.model, photo.base64, profile), { aiTagged: true });
             tagged++;
+            if (g.multipleInPhoto) {
+              g.needsReview = true;
+              multiple++;
+            }
           } catch (e) {
             lastError = (e as Error).message;
           }
@@ -127,6 +133,7 @@ export default function ClosetScreen() {
     if (tagged) parts.push(`${tagged} etiquetadas por Gemini.`);
     if (review) parts.push(`${review} quedaron "Por revisar": tócalas para completar sus etiquetas.`);
     if (failed) parts.push(`${failed} fotos no se pudieron procesar.`);
+    if (multiple) parts.push(`${multiple} fotos mostraban varias prendas; quedaron "Por revisar".`);
     if (!apiKey) parts.push('Configura tu API Key de Gemini en Historial/Ajustes para etiquetar automáticamente.');
     else if (lastError) parts.push(`Último error: ${lastError}`);
     if (review) setFilter('all');
@@ -218,6 +225,13 @@ export default function ClosetScreen() {
 
       <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title="Agregar prenda">
         <View style={{ gap: space.sm, paddingBottom: space.sm }}>
+          <View style={styles.tip}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.charcoal} />
+            <Text style={styles.tipText}>
+              <Text style={{ fontWeight: '700' }}>Una sola prenda por foto.</Text> Para que las recomendaciones sean precisas, toma o carga
+              imágenes donde se vea únicamente una prenda (extendida o colgada, sobre fondo liso y con buena luz), no varias al tiempo.
+            </Text>
+          </View>
           <Button label="Tomar foto" icon="camera-outline" onPress={() => handlePick('camera')} />
           <Button label="Elegir una foto" icon="image-outline" variant="secondary" onPress={() => handlePick('library')} />
           <Button
@@ -281,6 +295,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     overflow: 'hidden',
   },
+  tip: { flexDirection: 'row', gap: space.sm, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: space.md, marginBottom: space.xs },
+  tipText: { flex: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, color: colors.ink },
   sheetHelp: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: colors.muted, textAlign: 'center', marginTop: 2 },
   fab: {
     position: 'absolute',
