@@ -1,6 +1,7 @@
 import type { PlanContext } from './planner';
 import { parseNote, warmthNeed } from './planner';
-import type { Category, Garment, Level, Look } from './types';
+import type { Category, Garment, Level, Look, UserProfile } from './types';
+import { profileContext } from './prompts';
 import { CATEGORY_LABEL } from './types';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -94,11 +95,17 @@ Califica abrigo térmico (1-5) y formalidad ejecutiva (1-5). "aptoLluvia" es tru
 Responde únicamente con el JSON solicitado, en español.`;
 
 /** Etiqueta automáticamente una prenda a partir de su foto JPEG (base64). */
-export async function tagGarment(apiKey: string, model: string, jpegBase64: string): Promise<GarmentTags> {
+export async function tagGarment(
+  apiKey: string,
+  model: string,
+  jpegBase64: string,
+  profile: UserProfile | null = null,
+): Promise<GarmentTags> {
+  const ctx = profileContext(profile);
   const raw = (await callGemini(
     apiKey,
     model,
-    [{ text: TAG_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: jpegBase64 } }],
+    [{ text: ctx ? `${TAG_PROMPT}\n\nCalifica la formalidad pensando en su profesión y estilo.\n${ctx}` : TAG_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: jpegBase64 } }],
     TAG_SCHEMA,
     0.2,
   )) as Record<string, unknown>;
@@ -148,7 +155,14 @@ function compactInventory(items: Garment[]) {
  * Pide a Gemini un look para UN solo día. Las prendas de los otros 4 días se envían como
  * lista de exclusión obligatoria. La respuesta se valida después con el motor de reglas local.
  */
-export async function suggestLookWithGemini(apiKey: string, model: string, ctx: PlanContext, dayLabel: string): Promise<Look> {
+export async function suggestLookWithGemini(
+  apiKey: string,
+  model: string,
+  ctx: PlanContext,
+  dayLabel: string,
+  profile: UserProfile | null = null,
+): Promise<Look> {
+  const personal = profileContext(profile);
   const excluded = [...ctx.exclude];
   const forbiddenLooks = [...ctx.historySignatures, ...ctx.avoidSignatures];
   const w = ctx.weather;
@@ -165,6 +179,7 @@ REGLAS OBLIGATORIAS:
 6. Usa solo ids del inventario.
 
 Nota rápida de la usuaria para este día (respétala): "${ctx.note || 'sin nota'}".
+${personal ? `\n${personal}\nEn la justificación menciona brevemente por qué el look favorece su tipo de cuerpo o su colorimetría.\n` : ''}
 
 INVENTARIO (JSON): ${JSON.stringify(compactInventory(ctx.items))}`;
 

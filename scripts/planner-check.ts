@@ -44,3 +44,11 @@ days.forEach((d) => history.add(lookSignature(d.look!)));
 const v = validateLook(days[0].look!, { ...ctxFor(0), historySignatures: history }, false);
 if (!v.some((e) => e.includes('Historial'))) throw new Error('no detecta repetición de historial');
 console.log('OK: reglas verificadas');
+
+// Contexto de perfil inyectado en los prompts de Gemini.
+import { profileContext } from '../src/lib/prompts';
+import { EMPTY_PROFILE } from '../src/lib/types';
+if (profileContext(null) !== '' || profileContext(EMPTY_PROFILE).includes('Altura')) throw new Error('perfil vacío no debe inyectar datos');
+const pc = profileContext({ ...EMPTY_PROFILE, name: 'Ana', heightCm: 165, bodyType: 'pera', skinSeason: 'otono', undertone: 'calido' });
+for (const k of ['Ana', '165 cm', 'Pera', 'Otoño', 'subtono cálido']) if (!pc.includes(k)) throw new Error(`falta "${k}" en el contexto de perfil`);
+console.log('OK: contexto de perfil');

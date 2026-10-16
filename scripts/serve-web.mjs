@@ -42,6 +42,6 @@ createServer(async (req, res) => {
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)
     .map((i) => `http://${i.address}:${port}`);
-  console.log(`Cápsula Ejecutiva en http://localhost:${port}`);
+  console.log(`My Closet en http://localhost:${port}`);
   for (const u of ips) console.log(`Desde el iPhone (misma Wi-Fi): ${u}`);
 });

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Cápsula Ejecutiva",
+    "name": "My Closet",
     "slug": "capsula-ejecutiva",
     "scheme": "capsula",
     "version": "1.0.0",
@@ -12,8 +12,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "co.capsula.ejecutiva",
       "infoPlist": {
-        "NSCameraUsageDescription": "Cápsula Ejecutiva usa la cámara para fotografiar las prendas de tu clóset.",
-        "NSPhotoLibraryUsageDescription": "Cápsula Ejecutiva accede a tu fototeca para agregar prendas a tu clóset."
+        "NSCameraUsageDescription": "My Closet usa la cámara para fotografiar las prendas de tu clóset.",
+        "NSPhotoLibraryUsageDescription": "My Closet accede a tu fototeca para agregar prendas a tu clóset."
       }
     },
     "android": {
@@ -28,8 +28,8 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "output": "single",
-      "name": "Cápsula Ejecutiva",
-      "shortName": "Cápsula",
+      "name": "My Closet",
+      "shortName": "My Closet",
       "themeColor": "#F6F1E9",
       "backgroundColor": "#F6F1E9",
       "display": "standalone"
@@ -40,8 +40,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Cápsula Ejecutiva accede a tu fototeca para agregar prendas a tu clóset.",
-          "cameraPermission": "Cápsula Ejecutiva usa la cámara para fotografiar las prendas de tu clóset."
+          "photosPermission": "My Closet accede a tu fototeca para agregar prendas a tu clóset.",
+          "cameraPermission": "My Closet usa la cámara para fotografiar las prendas de tu clóset."
         }
       ]
     ],

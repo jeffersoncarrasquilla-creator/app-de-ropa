@@ -13,7 +13,7 @@ const head = `
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Cápsula" />
+    <meta name="apple-mobile-web-app-title" content="My Closet" />
     <meta name="description" content="Armario cápsula ejecutivo y planificador semanal para el clima de Bogotá." />
     <style>html,body{background:#F6F1E9}</style>`;
 
@@ -31,8 +31,8 @@ if (!standalone) {
     join(dist, 'manifest.json'),
     JSON.stringify(
       {
-        name: 'Cápsula Ejecutiva',
-        short_name: 'Cápsula',
+        name: 'My Closet',
+        short_name: 'My Closet',
         start_url: `${base}/`,
         scope: `${base}/`,
         display: 'standalone',
@@ -68,7 +68,7 @@ if (!standalone) {
     // Fragmento para hosts que ya aportan <html>/<head>/<body> (p. ej. Artifacts de claude.ai).
     const reset = html.match(/<style id="expo-reset">[\s\S]*?<\/style>/)?.[0] ?? '';
     const fragment = [
-      '<title>Cápsula Ejecutiva</title>',
+      '<title>My Closet</title>',
       '<meta name="theme-color" content="#F6F1E9">',
       reset,
       '<style>html,body{background:#F6F1E9;color:#2B2A28}</style>',

@@ -5,7 +5,7 @@ import { useStore, newId } from '../lib/store';
 import { colors, fonts, radius, space } from '../lib/theme';
 import type { Category, Garment } from '../lib/types';
 import { CATEGORY_LABEL, CATEGORY_ORDER } from '../lib/types';
-import { pickPhoto, processAndStorePhoto, type PickSource } from '../lib/images';
+import { BATCH_LIMIT, pickPhotos, processAndStorePhoto, type PickSource } from '../lib/images';
 import { tagGarment } from '../lib/gemini';
 import { Button, Chip, LevelDots, LoadingOverlay, ScreenHeader, Sheet, confirmAction, notify } from '../components/ui';
 import { GarmentImage } from '../components/GarmentImage';
@@ -14,7 +14,7 @@ import { GarmentEditor } from '../components/GarmentEditor';
 type Filter = 'all' | Category;
 
 export default function ClosetScreen() {
-  const { items, addGarment, updateGarment, deleteGarment, apiKey, settings } = useStore();
+  const { items, addGarment, updateGarment, deleteGarment, apiKey, settings, profile } = useStore();
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState<Filter>('all');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -31,55 +31,112 @@ export default function ClosetScreen() {
   const columns = Math.min(4, Math.max(2, Math.floor(Math.min(width, 900) / 190)));
   const cardWidth = (Math.min(width, 900) - space.xl * 2 - space.md * (columns - 1)) / columns;
 
-  async function handlePick(source: PickSource) {
+  function blankGarment(id: string, uri: string): Garment {
+    return {
+      id,
+      imageUri: uri,
+      createdAt: new Date().toISOString(),
+      category: 'top',
+      subtype: '',
+      name: '',
+      color: '',
+      colorHex: '#A39382',
+      texture: '',
+      warmth: 3,
+      formality: 3,
+      rainSafe: false,
+      aiTagged: false,
+    };
+  }
+
+  async function handlePick(source: PickSource, multiple = false) {
     setPickerOpen(false);
     try {
       // En iOS nativo se espera a que la hoja se cierre antes de presentar el selector.
       // En web no: Safari exige que el selector de archivos se abra dentro del mismo toque.
       if (Platform.OS !== 'web') await new Promise((r) => setTimeout(r, 350));
-      const uri = await pickPhoto(source);
-      if (!uri) return;
-      const id = newId();
-      setBusy('Convirtiendo a JPEG y comprimiendo…');
-      const photo = await processAndStorePhoto(uri, id);
-      const base: Garment = {
-        id,
-        imageUri: photo.uri,
-        createdAt: new Date().toISOString(),
-        category: 'top',
-        subtype: '',
-        name: '',
-        color: '',
-        colorHex: '#A39382',
-        texture: '',
-        warmth: 3,
-        formality: 3,
-        rainSafe: false,
-        aiTagged: false,
-      };
-      let aiMessage: string | undefined;
-      if (apiKey) {
-        setBusy(`Analizando la prenda con ${settings.model}…`);
-        try {
-          const tags = await tagGarment(apiKey, settings.model, photo.base64);
-          Object.assign(base, tags, { aiTagged: true });
-        } catch (e) {
-          aiMessage = `${(e as Error).message} Completa las etiquetas manualmente.`;
-        }
-      } else {
-        aiMessage = 'Sin API Key de Gemini: etiqueta manualmente o configúrala en Historial/Ajustes.';
-      }
-      setBusy(null);
-      setEditing({ garment: base, isNew: true, aiMessage });
+      const uris = await pickPhotos(source, multiple);
+      if (!uris.length) return;
+      if (multiple && uris.length > 1) await ingestBatch(uris);
+      else await ingestOne(uris[0]);
     } catch (e) {
       setBusy(null);
       notify('No se pudo agregar la foto', (e as Error).message);
     }
   }
 
+  /** Una foto: comprime, etiqueta con Gemini y abre el editor para confirmar. */
+  async function ingestOne(uri: string) {
+    const id = newId();
+    setBusy('Convirtiendo a JPEG y comprimiendo…');
+    const photo = await processAndStorePhoto(uri, id);
+    const base = blankGarment(id, photo.uri);
+    let aiMessage: string | undefined;
+    if (apiKey) {
+      setBusy(`Analizando la prenda con ${settings.model}…`);
+      try {
+        Object.assign(base, await tagGarment(apiKey, settings.model, photo.base64, profile), { aiTagged: true });
+      } catch (e) {
+        aiMessage = `${(e as Error).message} Completa las etiquetas manualmente.`;
+      }
+    } else {
+      aiMessage = 'Sin API Key de Gemini: etiqueta manualmente o configúrala en Historial/Ajustes.';
+    }
+    setBusy(null);
+    setEditing({ garment: base, isNew: true, aiMessage });
+  }
+
+  /**
+   * Carga masiva: procesa la cola en orden (comprimir → etiquetar) y agrega cada prenda
+   * directamente al clóset. Las que la IA no pudo etiquetar quedan marcadas "Por revisar".
+   */
+  async function ingestBatch(uris: string[]) {
+    let tagged = 0;
+    let review = 0;
+    let failed = 0;
+    let lastError = '';
+    for (let i = 0; i < uris.length; i++) {
+      const n = `${i + 1} de ${uris.length}`;
+      try {
+        setBusy(`Prenda ${n}\nComprimiendo…`);
+        const id = newId();
+        const photo = await processAndStorePhoto(uris[i], id);
+        const g = blankGarment(id, photo.uri);
+        if (apiKey) {
+          setBusy(`Prenda ${n}\nEtiquetando con ${settings.model}…`);
+          try {
+            Object.assign(g, await tagGarment(apiKey, settings.model, photo.base64, profile), { aiTagged: true });
+            tagged++;
+          } catch (e) {
+            lastError = (e as Error).message;
+          }
+        }
+        if (!g.aiTagged) {
+          g.name = `Prenda nueva ${i + 1}`;
+          g.needsReview = true;
+          review++;
+        }
+        addGarment(g);
+      } catch (e) {
+        failed++;
+        lastError = (e as Error).message;
+      }
+    }
+    setBusy(null);
+    const parts = [`${tagged + review} prendas agregadas a tu clóset.`];
+    if (tagged) parts.push(`${tagged} etiquetadas por Gemini.`);
+    if (review) parts.push(`${review} quedaron "Por revisar": tócalas para completar sus etiquetas.`);
+    if (failed) parts.push(`${failed} fotos no se pudieron procesar.`);
+    if (!apiKey) parts.push('Configura tu API Key de Gemini en Historial/Ajustes para etiquetar automáticamente.');
+    else if (lastError) parts.push(`Último error: ${lastError}`);
+    if (review) setFilter('all');
+    notify('Carga masiva terminada', parts.join(' '));
+  }
+
   function handleSave(g: Garment) {
-    if (editing?.isNew) addGarment(g);
-    else updateGarment(g);
+    const clean = { ...g, needsReview: false };
+    if (editing?.isNew) addGarment(clean);
+    else updateGarment(clean);
     setEditing(null);
   }
 
@@ -95,7 +152,10 @@ export default function ClosetScreen() {
       onPress={() => setEditing({ garment: item, isNew: false })}
       style={({ pressed }) => [styles.card, { width: cardWidth, opacity: pressed ? 0.85 : 1 }]}
     >
-      <GarmentImage garment={item} style={{ width: '100%', aspectRatio: 3 / 4 }} />
+      <View>
+        <GarmentImage garment={item} style={{ width: '100%', aspectRatio: 3 / 4 }} />
+        {item.needsReview ? <Text style={styles.reviewBadge}>Por revisar</Text> : null}
+      </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardCat}>{CATEGORY_LABEL[item.category]}</Text>
         <Text style={styles.cardName} numberOfLines={2}>
@@ -159,7 +219,16 @@ export default function ClosetScreen() {
       <Sheet visible={pickerOpen} onClose={() => setPickerOpen(false)} title="Agregar prenda">
         <View style={{ gap: space.sm, paddingBottom: space.sm }}>
           <Button label="Tomar foto" icon="camera-outline" onPress={() => handlePick('camera')} />
-          <Button label="Elegir de la fototeca" icon="images-outline" variant="secondary" onPress={() => handlePick('library')} />
+          <Button label="Elegir una foto" icon="image-outline" variant="secondary" onPress={() => handlePick('library')} />
+          <Button
+            label={`Carga masiva (hasta ${BATCH_LIMIT} fotos)`}
+            icon="images-outline"
+            variant="secondary"
+            onPress={() => handlePick('library', true)}
+          />
+          <Text style={styles.sheetHelp}>
+            En la carga masiva cada foto se comprime y Gemini la etiqueta automáticamente; luego puedes revisar cualquier prenda tocándola.
+          </Text>
           <Button label="Cancelar" variant="ghost" onPress={() => setPickerOpen(false)} />
         </View>
       </Sheet>
@@ -197,6 +266,22 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xxl, gap: space.md, paddingBottom: 80 },
   emptyTitle: { fontFamily: fonts.serif, fontSize: 22, color: colors.charcoal },
   emptyText: { fontFamily: fonts.sans, fontSize: 14, lineHeight: 21, color: colors.muted, textAlign: 'center' },
+  reviewBadge: {
+    position: 'absolute',
+    top: space.sm,
+    left: space.sm,
+    backgroundColor: colors.charcoal,
+    color: colors.ivory,
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  sheetHelp: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 17, color: colors.muted, textAlign: 'center', marginTop: 2 },
   fab: {
     position: 'absolute',
     right: space.xl,

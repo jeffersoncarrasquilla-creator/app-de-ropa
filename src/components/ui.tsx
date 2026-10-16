@@ -189,6 +189,9 @@ export function IconButton({
 export function Chip({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      accessibilityLabel={label}
       onPress={onPress}
       style={[styles.chip, active && { backgroundColor: colors.charcoal, borderColor: colors.charcoal }]}
     >

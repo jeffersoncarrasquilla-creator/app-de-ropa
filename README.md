@@ -1,4 +1,4 @@
-# Cápsula Ejecutiva
+# My Closet
 
 App para iPhone (React Native + Expo SDK 57 + TypeScript + Expo Router, con versión web/PWA) para gestionar un armario cápsula ejecutivo y planear looks de lunes a viernes para el clima de Bogotá (9 °C a 19 °C, lluvia frecuente, oficina cerrada).
 
@@ -6,7 +6,8 @@ App para iPhone (React Native + Expo SDK 57 + TypeScript + Expo Router, con vers
 
 | Pestaña | Qué hace |
 | --- | --- |
-| **Mi Clóset** | Botón **+** → cámara o fototeca (`expo-image-picker`). La foto se convierte de HEIC a JPEG, se redimensiona y comprime (`expo-image-manipulator`) y se guarda en el teléfono (`expo-file-system`; IndexedDB en web). Gemini la etiqueta en JSON: categoría, color, textura, abrigo térmico 1‑5, formalidad ejecutiva 1‑5 y apto para lluvia. Las etiquetas se pueden corregir a mano. |
+| **Bienvenida y perfil** | Primera apertura: pantalla con el eslogan *"My Closet, tu asesor de moda, siempre"* y onboarding en 2 pasos (nombre, edad, profesión, estilo; altura, peso, tipo de cuerpo, medidas, colorimetría y subtono). Editable en Ajustes. Estos datos se inyectan en los prompts de Gemini. |
+| **Mi Clóset** | Botón **+** → cámara o fototeca (`expo-image-picker`). La foto se convierte de HEIC a JPEG, se redimensiona y comprime (`expo-image-manipulator`) y se guarda en el teléfono (`expo-file-system`; IndexedDB en web). Gemini la etiqueta en JSON: categoría, color, textura, abrigo térmico 1‑5, formalidad ejecutiva 1‑5 y apto para lluvia. Las etiquetas se pueden corregir a mano. **Carga masiva**: hasta 20 fotos de la fototeca a la vez; cada una se comprime y etiqueta en cola y las que fallan quedan *Por revisar*. |
 | **Semana** | Genera 5 looks por capas (blusa + tercera pieza + pantalón/falda + calzado + bolso opcional) con el pronóstico de Open‑Meteo para Bogotá (o climatología 9–19 °C si no hay red). Cada tarjeta tiene **candado** y **Regenerar solo este día** con nota rápida. |
 | **Historial/Ajustes** | Looks confirmados (no se vuelven a proponer). API Key de Gemini en `expo-secure-store` (llavero iOS) y modelo configurable (por defecto `gemini-4-argon`). |
 

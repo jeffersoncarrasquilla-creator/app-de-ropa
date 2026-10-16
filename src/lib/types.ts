@@ -29,6 +29,8 @@ export interface Garment {
   formality: Level;
   rainSafe: boolean;
   aiTagged: boolean;
+  /** Carga masiva: la IA no pudo etiquetarla y conviene revisarla a mano. */
+  needsReview?: boolean;
 }
 
 export interface Look {
@@ -86,3 +88,61 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+
+export const STYLE_OPTIONS = ['Clásico ejecutivo', 'Minimalista', 'Elegante femenino', 'Moderno', 'Creativo', 'Relajado'] as const;
+
+export const BODY_TYPES = [
+  { key: 'reloj', label: 'Reloj de arena', hint: 'Hombros y cadera equilibrados, cintura marcada' },
+  { key: 'pera', label: 'Pera / triángulo', hint: 'Cadera más ancha que los hombros' },
+  { key: 'invertido', label: 'Triángulo invertido', hint: 'Hombros más anchos que la cadera' },
+  { key: 'rectangulo', label: 'Rectángulo', hint: 'Hombros, cintura y cadera similares' },
+  { key: 'manzana', label: 'Manzana / óvalo', hint: 'Volumen en el torso, piernas estilizadas' },
+] as const;
+export type BodyType = (typeof BODY_TYPES)[number]['key'];
+
+/** Colorimetría estacional. */
+export const SKIN_SEASONS = [
+  { key: 'primavera', label: 'Primavera', hint: 'Cálida y luminosa' },
+  { key: 'verano', label: 'Verano', hint: 'Fría y suave' },
+  { key: 'otono', label: 'Otoño', hint: 'Cálida y profunda' },
+  { key: 'invierno', label: 'Invierno', hint: 'Fría y contrastada' },
+] as const;
+export type SkinSeason = (typeof SKIN_SEASONS)[number]['key'];
+
+export const UNDERTONES = [
+  { key: 'calido', label: 'Cálido' },
+  { key: 'frio', label: 'Frío' },
+  { key: 'neutro', label: 'Neutro' },
+] as const;
+export type Undertone = (typeof UNDERTONES)[number]['key'];
+
+export interface UserProfile {
+  name: string;
+  age: number | null;
+  profession: string;
+  style: string;
+  heightCm: number | null;
+  weightKg: number | null;
+  bodyType: BodyType | null;
+  bustCm: number | null;
+  waistCm: number | null;
+  hipCm: number | null;
+  skinSeason: SkinSeason | null;
+  undertone: Undertone | null;
+  completedAt?: string;
+}
+
+export const EMPTY_PROFILE: UserProfile = {
+  name: '',
+  age: null,
+  profession: '',
+  style: 'Clásico ejecutivo',
+  heightCm: null,
+  weightKg: null,
+  bodyType: null,
+  bustCm: null,
+  waistCm: null,
+  hipCm: null,
+  skinSeason: null,
+  undertone: null,
+};

@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { DAY_NAMES, DEFAULT_SETTINGS } from './types';
-import type { DayPlan, DayWeather, Garment, HistoryEntry, Look, Settings, WeekPlan } from './types';
+import type { DayPlan, DayWeather, Garment, HistoryEntry, Look, Settings, UserProfile, WeekPlan } from './types';
 import { kvDelete, kvGetJson, kvSetJson } from './kv';
 import { getApiKey, setApiKey as persistApiKey } from './secrets';
 import { mondayFor, weekDates } from './dates';
@@ -15,6 +15,7 @@ const K = {
   week: 'capsula.week.v1',
   history: 'capsula.history.v1',
   settings: 'capsula.settings.v1',
+  profile: 'capsula.profile.v1',
 };
 
 function emptyWeek(monday: string): WeekPlan {
@@ -36,6 +37,9 @@ interface StoreValue {
   history: HistoryEntry[];
   settings: Settings;
   apiKey: string;
+  /** null = primera vez: se muestra la bienvenida y el onboarding. */
+  profile: UserProfile | null;
+  saveProfile: (p: UserProfile) => void;
   busyDays: number[];
   itemById: Map<string, Garment>;
   addGarment: (g: Garment) => void;
@@ -68,22 +72,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [apiKey, setApiKeyState] = useState('');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [weather, setWeather] = useState<DayWeather[]>(() => week.days.map((d) => bogotaClimatology(d.date)));
   const [busyDays, setBusyDays] = useState<number[]>([]);
 
   // Referencias al estado más reciente para las operaciones asíncronas.
-  const ref = useRef({ items, week, history, settings, apiKey, weather });
-  ref.current = { items, week, history, settings, apiKey, weather };
+  const ref = useRef({ items, week, history, settings, apiKey, weather, profile });
+  ref.current = { items, week, history, settings, apiKey, weather, profile };
 
   // Carga inicial desde el almacenamiento local del teléfono.
   useEffect(() => {
     (async () => {
-      const [i, w, h, s, key] = await Promise.all([
+      const [i, w, h, s, key, prof] = await Promise.all([
         kvGetJson<Garment[]>(K.items, []),
         kvGetJson<WeekPlan | null>(K.week, null),
         kvGetJson<HistoryEntry[]>(K.history, []),
         kvGetJson<Settings>(K.settings, DEFAULT_SETTINGS),
         getApiKey().catch(() => ''),
+        kvGetJson<UserProfile | null>(K.profile, null),
       ]);
       const merged = { ...DEFAULT_SETTINGS, ...s };
       const monday = mondayFor(new Date(), merged.weekOffset);
@@ -91,6 +97,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setHistory(h);
       setSettings(merged);
       setApiKeyState(key);
+      setProfile(prof);
       setWeek(w && w.weekStart === monday ? w : emptyWeek(monday));
       setReady(true);
     })();
@@ -148,6 +155,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const saveProfile = useCallback((p: UserProfile) => {
+    const next = { ...p, completedAt: p.completedAt ?? new Date().toISOString() };
+    setProfile(next);
+    void kvSetJson(K.profile, next);
+  }, []);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), []);
 
   const saveApiKey = useCallback(async (key: string) => {
@@ -176,7 +189,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const computeDay = useCallback(
     async (dayIndex: number, days: DayPlan[], avoidCurrent: boolean): Promise<Partial<DayPlan>> => {
-      const { items: inv, history: hist, settings: st, apiKey: key, weather: wx } = ref.current;
+      const { items: inv, history: hist, settings: st, apiKey: key, weather: wx, profile: prof } = ref.current;
       const day = days[dayIndex];
       const exclude = new Set<string>();
       for (const other of days) if (other.dayIndex !== dayIndex) lookItemIds(other.look).forEach((id) => exclude.add(id));
@@ -194,7 +207,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const warnings: string[] = [];
       if (st.useGeminiPlanner && key) {
         try {
-          const proposal = await suggestLookWithGemini(key, st.model, ctx, DAY_NAMES[dayIndex]);
+          const proposal = await suggestLookWithGemini(key, st.model, ctx, DAY_NAMES[dayIndex], prof);
           if (proposal.accessoryId && !inv.some((g) => g.id === proposal.accessoryId)) proposal.accessoryId = undefined;
           const violations = validateLook(proposal, ctx, false);
           if (!violations.length) {
@@ -262,7 +275,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const clearAll = useCallback(async () => {
     ref.current.items.forEach((g) => deleteStoredPhoto(g.imageUri));
-    await Promise.all(Object.values(K).map(kvDelete));
+    // El perfil y la API Key se conservan.
+    await Promise.all([K.items, K.week, K.history, K.settings].map(kvDelete));
     setItems([]);
     setHistory([]);
     setWeek(emptyWeek(mondayFor(new Date(), ref.current.settings.weekOffset)));
@@ -276,6 +290,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     history,
     settings,
     apiKey,
+    profile,
+    saveProfile,
     busyDays,
     itemById,
     addGarment,

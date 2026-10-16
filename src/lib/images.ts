@@ -15,13 +15,23 @@ const QUALITY = Platform.OS === 'web' ? 0.62 : 0.72;
 
 export type PickSource = 'camera' | 'library';
 
-/** Abre la cámara o la fototeca del iPhone. Devuelve null si el usuario cancela. */
-export async function pickPhoto(source: PickSource): Promise<string | null> {
+export const BATCH_LIMIT = 20;
+
+/**
+ * Abre la cámara o la fototeca del iPhone (PHPicker en iOS 14+). Con `multiple`, la fototeca
+ * permite elegir hasta BATCH_LIMIT fotos a la vez (sin recorte, que iOS no admite en selección múltiple).
+ * Devuelve [] si el usuario cancela.
+ */
+export async function pickPhotos(source: PickSource, multiple = false): Promise<string[]> {
+  const batch = multiple && source === 'library';
   const options: ImagePicker.ImagePickerOptions = {
     mediaTypes: ['images'],
     quality: 1,
-    allowsEditing: true,
+    allowsEditing: !batch,
     aspect: [3, 4],
+    allowsMultipleSelection: batch,
+    selectionLimit: batch ? BATCH_LIMIT : 1,
+    orderedSelection: batch,
     // Solicita a iOS una representación compatible (JPEG) en lugar del HEIC original.
     preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     exif: false,
@@ -35,16 +45,16 @@ export async function pickPhoto(source: PickSource): Promise<string | null> {
     if (!perm.granted) {
       throw new Error(
         source === 'camera'
-          ? 'Sin permiso de cámara. Actívalo en Ajustes de iOS > Cápsula Ejecutiva.'
-          : 'Sin permiso de fototeca. Actívalo en Ajustes de iOS > Cápsula Ejecutiva.',
+          ? 'Sin permiso de cámara. Actívalo en Ajustes de iOS > My Closet.'
+          : 'Sin permiso de fototeca. Actívalo en Ajustes de iOS > My Closet.',
       );
     }
   }
 
   const result =
     source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-  if (result.canceled || !result.assets?.length) return null;
-  return result.assets[0].uri;
+  if (result.canceled || !result.assets?.length) return [];
+  return result.assets.slice(0, batch ? BATCH_LIMIT : 1).map((a) => a.uri);
 }
 
 /**

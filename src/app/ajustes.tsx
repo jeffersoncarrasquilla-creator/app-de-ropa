@@ -7,8 +7,10 @@ import { longDate } from '../lib/dates';
 import { lookItemIds } from '../lib/planner';
 import { pingGemini } from '../lib/gemini';
 import { secureStorageAvailable } from '../lib/secrets';
-import { DEFAULT_SETTINGS } from '../lib/types';
-import { Button, ScreenHeader, SectionLabel, Toggle, confirmAction, notify } from '../components/ui';
+import { BODY_TYPES, DEFAULT_SETTINGS, SKIN_SEASONS } from '../lib/types';
+import type { UserProfile } from '../lib/types';
+import { Button, ScreenHeader, SectionLabel, Sheet, Toggle, confirmAction, notify } from '../components/ui';
+import { ProfileForm } from '../components/ProfileForm';
 import { GarmentImage } from '../components/GarmentImage';
 
 type Tab = 'historial' | 'ajustes';
@@ -17,7 +19,7 @@ export default function HistorySettingsScreen() {
   const [tab, setTab] = useState<Tab>('historial');
   return (
     <View style={styles.screen}>
-      <ScreenHeader kicker="Cápsula Ejecutiva" title={tab === 'historial' ? 'Historial' : 'Ajustes'} />
+      <ScreenHeader kicker="My Closet" title={tab === 'historial' ? 'Historial' : 'Ajustes'} />
       <View style={styles.segment}>
         {(['historial', 'ajustes'] as Tab[]).map((t) => (
           <Pressable key={t} onPress={() => setTab(t)} style={[styles.segBtn, tab === t && styles.segActive]}>
@@ -77,7 +79,8 @@ function HistoryPanel() {
 }
 
 function SettingsPanel() {
-  const { apiKey, saveApiKey, settings, updateSettings, items, history, clearAll } = useStore();
+  const { apiKey, saveApiKey, settings, updateSettings, items, history, clearAll, profile, saveProfile } = useStore();
+  const [profileDraft, setProfileDraft] = useState<UserProfile | null>(null);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [modelDraft, setModelDraft] = useState(settings.model);
   const [testing, setTesting] = useState(false);
@@ -104,6 +107,38 @@ function SettingsPanel() {
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <SectionLabel>Mi perfil</SectionLabel>
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>{profile?.name || 'Sin nombre'}</Text>
+        <Text style={styles.help}>{profileSummary(profile)}</Text>
+        <Text style={styles.help}>Gemini usa estos datos para adaptar cortes, colores y formalidad a ti.</Text>
+        <Button
+          label="Editar perfil"
+          icon="person-outline"
+          variant="secondary"
+          style={{ marginTop: space.md }}
+          onPress={() => profile && setProfileDraft(profile)}
+        />
+      </View>
+      <Sheet visible={!!profileDraft} onClose={() => setProfileDraft(null)} title="Mi perfil">
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {profileDraft ? <ProfileForm value={profileDraft} onChange={setProfileDraft} /> : null}
+          <View style={{ gap: space.sm, marginVertical: space.lg }}>
+            <Button
+              label="Guardar perfil"
+              icon="checkmark"
+              disabled={!profileDraft?.name.trim()}
+              onPress={() => {
+                if (!profileDraft) return;
+                saveProfile({ ...profileDraft, name: profileDraft.name.trim() });
+                setProfileDraft(null);
+              }}
+            />
+            <Button label="Cancelar" variant="ghost" onPress={() => setProfileDraft(null)} />
+          </View>
+        </ScrollView>
+      </Sheet>
+
       <SectionLabel>Google Gemini</SectionLabel>
       <View style={styles.card}>
         <Text style={styles.label}>API Key</Text>
@@ -170,14 +205,30 @@ function SettingsPanel() {
           variant="danger"
           style={{ marginTop: space.md }}
           onPress={async () => {
-            const ok = await confirmAction('Borrar todo', 'Se eliminarán prendas, fotos, semana e Historial. La API Key se conserva.', 'Borrar');
+            const ok = await confirmAction('Borrar todo', 'Se eliminarán prendas, fotos, semana e Historial. Tu perfil y la API Key se conservan.', 'Borrar');
             if (ok) await clearAll();
           }}
         />
       </View>
-      <Text style={styles.footer}>Cápsula Ejecutiva · Bogotá 2.640 m · 9–19 °C</Text>
+      <Text style={styles.footer}>My Closet · Bogotá 2.640 m · 9–19 °C</Text>
     </ScrollView>
   );
+}
+
+function profileSummary(p: UserProfile | null): string {
+  if (!p) return '';
+  const body = BODY_TYPES.find((b) => b.key === p.bodyType)?.label;
+  const season = SKIN_SEASONS.find((c) => c.key === p.skinSeason)?.label;
+  return [
+    p.age ? `${p.age} años` : null,
+    p.profession || null,
+    p.style,
+    p.heightCm ? `${p.heightCm} cm` : null,
+    body,
+    season ? `Colorimetría ${season.toLowerCase()}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 const styles = StyleSheet.create({

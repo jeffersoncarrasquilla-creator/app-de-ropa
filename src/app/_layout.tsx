@@ -7,9 +7,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoreProvider, useStore } from '../lib/store';
 import { colors, fonts } from '../lib/theme';
 import { DialogHost } from '../components/ui';
+import { Welcome } from '../components/Welcome';
 
 function TabsNavigator() {
-  const { ready } = useStore();
+  const { ready, profile, saveProfile } = useStore();
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.ivory, alignItems: 'center', justifyContent: 'center' }}>
@@ -17,6 +18,8 @@ function TabsNavigator() {
       </View>
     );
   }
+  // Primera vez: bienvenida + onboarding de perfil antes de mostrar las pestañas.
+  if (!profile) return <Welcome onDone={saveProfile} />;
   return (
     <Tabs
       screenOptions={{
