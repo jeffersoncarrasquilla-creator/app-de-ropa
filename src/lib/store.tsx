@@ -4,7 +4,7 @@ import type { DayPlan, DayWeather, Garment, HistoryEntry, Look, OutfitStyle, Set
 import { CATEGORY_LABEL, OUTFIT_STYLES } from './types';
 import { kvDelete, kvGetJson, kvSetJson } from './kv';
 import { getApiKey, setApiKey as persistApiKey } from './secrets';
-import { mondayFor, weekDates } from './dates';
+import { mondayFor, toIsoDate, weekDates } from './dates';
 import { bogotaClimatology, fetchBogotaWeather } from './weather';
 import { lookItemIds, lookSignature, parseNote, planDay, validateLook } from './planner';
 import type { PlanContext } from './planner';
@@ -17,7 +17,11 @@ const K = {
   history: 'capsula.history.v1',
   settings: 'capsula.settings.v1',
   profile: 'capsula.profile.v1',
+  tryOnUsage: 'capsula.tryon-usage.v1',
 };
+
+/** Límite de imágenes del probador virtual por teléfono y por día (control de gasto de la API Key). */
+export const TRYON_DAILY_LIMIT = 10;
 
 function emptyWeek(monday: string): WeekPlan {
   return {
@@ -267,6 +271,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const day = w.days[dayIndex];
       if (!day?.look) return 'Primero genera el look de este día.';
       if (!key) return 'Configura tu API Key de Gemini en Ajustes para usar el probador virtual.';
+      const today = toIsoDate(new Date());
+      const usage = await kvGetJson<{ date: string; count: number }>(K.tryOnUsage, { date: today, count: 0 });
+      const used = usage.date === today ? usage.count : 0;
+      if (used >= TRYON_DAILY_LIMIT) {
+        return `Llegaste al límite de ${TRYON_DAILY_LIMIT} imágenes por hoy en este teléfono. Mañana podrás generar más.`;
+      }
       setTryOnBusy((b) => [...b, dayIndex]);
       try {
         const map = new Map(inv.map((g) => [g.id, g]));
@@ -280,6 +290,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (day.tryOnUri) deleteStoredPhoto(day.tryOnUri);
         const uri = saveGeneratedImage(img.base64, img.mimeType, `${day.date}-${Date.now()}`);
         patchDay(dayIndex, { tryOnUri: uri });
+        await kvSetJson(K.tryOnUsage, { date: today, count: used + 1 });
         return null;
       } catch (e) {
         return (e as Error).message;

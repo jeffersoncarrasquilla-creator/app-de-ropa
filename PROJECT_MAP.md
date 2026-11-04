@@ -57,7 +57,7 @@ scripts/
 - `Settings` { model (def. gemini-3.5-flash; gemini-4-argon migra), imageModel (def. gemini-3.1-flash-image), useGeminiPlanner, weekOffset 0|1, styleMode same|perDay|null (null = preguntar), weekStyle }
 - `UserProfile` { name, age, profession, style, heightCm, weightKg, bodyType, bust/waist/hipCm?, skinSeason, undertone, bodyPhotoUri?, completedAt }
 - Perfil: opciones en `STYLE_OPTIONS`, `BODY_TYPES`, `SKIN_SEASONS`, `UNDERTONES`; `EMPTY_PROFILE` como valor inicial.
-- Claves kv: `capsula.items.v1`, `capsula.week.v1`, `capsula.history.v1`, `capsula.settings.v1`, `capsula.profile.v1`
+- Claves kv: `capsula.items.v1`, `capsula.week.v1`, `capsula.history.v1`, `capsula.settings.v1`, `capsula.profile.v1`, `capsula.tryon-usage.v1` ({date, count})
 
 ## Flujos
 - Arranque: `_layout` carga store → si no hay `profile` → `Welcome` (bienvenida → pasos de perfil) → Tabs.
@@ -77,5 +77,6 @@ scripts/
 - [ ] Módulo 2 (resto) y módulos siguientes: pendientes de especificación (el mensaje del dueño llegó truncado)
 - [x] Prueba real con API Key (16-oct-2026): gemini-3.5-flash etiqueta y arma looks válidos; gemini-4-argon sin cuota en plan gratuito
 - [x] Correcciones de pruebas (16-oct): prendas repetibles/combinaciones únicas, vestidos, estilo por semana o por día, aviso una prenda por foto, IA con prioridad, probador virtual
-- [ ] Probador virtual sin probar con imagen real: la clave gratuita no tiene cuota en modelos de imagen (429)
+- [x] Probador virtual probado con facturación activa (4-nov): gemini-3.1-flash-image genera la imagen en ~7 s
+- [x] Límite del probador: TRYON_DAILY_LIMIT = 10 imágenes por teléfono y día (store.tsx); la API Key se pega en cada teléfono (decisión del dueño)
 - [ ] Pendiente técnico: el motor local aún no usa el perfil (solo Gemini lo recibe)

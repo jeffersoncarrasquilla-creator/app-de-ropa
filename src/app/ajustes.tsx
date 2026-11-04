@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useStore } from '../lib/store';
+import { TRYON_DAILY_LIMIT, useStore } from '../lib/store';
 import { colors, fonts, radius, space } from '../lib/theme';
 import { longDate } from '../lib/dates';
 import { lookItemIds } from '../lib/planner';
@@ -181,8 +181,8 @@ function SettingsPanel() {
           style={styles.input}
         />
         <Text style={styles.help}>
-          Genera la imagen de ti vestida con el look. Los modelos de imagen de Gemini suelen requerir facturación activa en Google AI
-          Studio (cobro por imagen).
+          Genera la imagen de ti vestida con el look. Requiere facturación activa en Google AI Studio (cobro por imagen). Máximo{' '}
+          {TRYON_DAILY_LIMIT} imágenes por día en este teléfono.
         </Text>
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
           <Button label="Guardar" icon="checkmark" onPress={() => void save()} style={{ flex: 1 }} />
