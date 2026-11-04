@@ -61,8 +61,8 @@ scripts/
 
 ## Flujos
 - Arranque: `_layout` carga store → si no hay `profile` → `Welcome` (bienvenida → pasos de perfil) → Tabs.
-- Carga simple: + → cámara/fototeca → `processAndStorePhoto` → `tagGarment(profile)` → `GarmentEditor` → guardar.
-- Carga masiva: + → "Varias fotos" → cola secuencial (comprimir → etiquetar) → se agregan directo; las que fallan quedan `needsReview`.
+- Carga simple: + → "Tomar foto" / "Elegir una foto" → `processAndStorePhoto` → `tagGarment(profile)` → `GarmentEditor` → guardar.
+- Carga masiva: + → "Carga masiva (hasta 20 fotos)" → `ingestBatch`: cola secuencial (comprimir → etiquetar) → se agregan directo; las que la IA no etiqueta o detecta varias prendas quedan `needsReview` ("Por revisar").
 - Semana: primera vez pregunta estilo (mismo / por día) · `generateWeek` (días sin candado) · `regenerateDay(i)`: prohíbe las combinaciones de los otros días, del Historial y la actual; las prendas pueden repetirse.
 - IA primero: `computeDay` pide a Gemini; valida en modo 'ai'; si falla o no hay clave, `planDay` local.
 - Probador: `generateTryOnForDay(i)` envía fotos de las prendas (+ foto de cuerpo entero si existe) a `generateTryOn`; requiere modelo de imagen con cuota.
@@ -80,3 +80,10 @@ scripts/
 - [x] Probador virtual probado con facturación activa (4-nov): gemini-3.1-flash-image genera la imagen en ~7 s
 - [x] Límite del probador: TRYON_DAILY_LIMIT = 10 imágenes por teléfono y día (store.tsx); la API Key se pega en cada teléfono (decisión del dueño)
 - [ ] Pendiente técnico: el motor local aún no usa el perfil (solo Gemini lo recibe)
+
+## Cómo mantener este mapa
+- Al cambiar código: actualiza las secciones afectadas (árbol, modelos, flujos, claves kv, estado por fases).
+- Nuevo archivo en `src/app`, `src/components` o `src/lib`: añadir una línea con su responsabilidad en el árbol.
+- Nueva clave en `K` (`store.tsx`) o en `kvSet`: añadirla a "Claves kv".
+- Antes de cerrar una tarea: `npx tsc --noEmit`, `npm run test:planner` y, si hay UI, una prueba E2E con Chromium (`/opt/pw-browsers/chromium`).
+- Límites y decisiones vigentes: `TRYON_DAILY_LIMIT = 10` por teléfono y día; la API Key se pega en cada teléfono (decisión del dueño); modelo de texto `gemini-3.5-flash`; modelo de imagen `gemini-3.1-flash-image` (requiere facturación).
